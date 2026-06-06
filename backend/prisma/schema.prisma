@@ -1,0 +1,202 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  name         String
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  clinic       Clinic?
+  appointments Appointment[]
+
+  @@map("users")
+}
+
+model Clinic {
+  id           String   @id @default(cuid())
+  userId       String   @unique @map("user_id")
+  name         String
+  address      String?
+  phone        String?
+  logoUrl      String?  @map("logo_url")
+  sessionPrice Decimal? @map("session_price") @db.Decimal(10, 2)
+  workingHours Json?    @map("working_hours")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user     User      @relation(fields: [userId], references: [id])
+  patients Patient[]
+
+  @@map("clinics")
+}
+
+model Patient {
+  id          String    @id @default(cuid())
+  clinicId    String    @map("clinic_id")
+  name        String
+  email       String?
+  phone       String?
+  birthDate   DateTime? @map("birth_date")
+  cpf         String?
+  address     String?
+  notes       String?
+  sessionPrice Decimal? @map("session_price") @db.Decimal(10, 2)
+  isActive    Boolean   @default(true) @map("is_active")
+  deletedAt   DateTime? @map("deleted_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  clinic        Clinic          @relation(fields: [clinicId], references: [id])
+  appointments  Appointment[]
+  medicalRecord MedicalRecord?
+  payments      Payment[]
+  notifications Notification[]
+
+  @@index([clinicId])
+  @@map("patients")
+}
+
+model Appointment {
+  id          String            @id @default(cuid())
+  patientId   String            @map("patient_id")
+  userId      String            @map("user_id")
+  startTime   DateTime          @map("start_time")
+  endTime     DateTime          @map("end_time")
+  status      AppointmentStatus @default(SCHEDULED)
+  isRecurring Boolean           @default(false) @map("is_recurring")
+  recurrenceRule String?        @map("recurrence_rule")
+  notes       String?
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  patient       Patient        @relation(fields: [patientId], references: [id])
+  user          User           @relation(fields: [userId], references: [id])
+  sessionNote   SessionNote?
+  payment       Payment?
+  notifications Notification[]
+
+  @@index([patientId])
+  @@index([userId])
+  @@index([startTime])
+  @@map("appointments")
+}
+
+model MedicalRecord {
+  id          String   @id @default(cuid())
+  patientId   String   @unique @map("patient_id")
+  anamnesis   String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  patient      Patient       @relation(fields: [patientId], references: [id])
+  sessionNotes SessionNote[]
+  files        RecordFile[]
+
+  @@map("medical_records")
+}
+
+model SessionNote {
+  id              String   @id @default(cuid())
+  appointmentId   String   @unique @map("appointment_id")
+  medicalRecordId String   @map("medical_record_id")
+  content         String
+  tags            String[]
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  appointment   Appointment   @relation(fields: [appointmentId], references: [id])
+  medicalRecord MedicalRecord @relation(fields: [medicalRecordId], references: [id])
+
+  @@index([medicalRecordId])
+  @@map("session_notes")
+}
+
+model RecordFile {
+  id              String   @id @default(cuid())
+  medicalRecordId String   @map("medical_record_id")
+  name            String
+  url             String
+  mimeType        String   @map("mime_type")
+  sizeBytes       Int      @map("size_bytes")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  medicalRecord MedicalRecord @relation(fields: [medicalRecordId], references: [id])
+
+  @@map("record_files")
+}
+
+model Payment {
+  id            String        @id @default(cuid())
+  appointmentId String        @unique @map("appointment_id")
+  patientId     String        @map("patient_id")
+  amount        Decimal       @db.Decimal(10, 2)
+  status        PaymentStatus @default(PENDING)
+  method        String?
+  paidAt        DateTime?     @map("paid_at")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+  patient     Patient     @relation(fields: [patientId], references: [id])
+
+  @@index([patientId])
+  @@index([status])
+  @@map("payments")
+}
+
+model Notification {
+  id            String             @id @default(cuid())
+  patientId     String             @map("patient_id")
+  appointmentId String             @map("appointment_id")
+  type          NotificationType
+  channel       NotificationChannel
+  status        NotificationStatus @default(PENDING)
+  sentAt        DateTime?          @map("sent_at")
+  createdAt     DateTime           @default(now()) @map("created_at")
+
+  patient     Patient     @relation(fields: [patientId], references: [id])
+  appointment Appointment @relation(fields: [appointmentId], references: [id])
+
+  @@index([appointmentId])
+  @@map("notifications")
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  CANCELLED
+}
+
+enum NotificationType {
+  REMINDER_24H
+  REMINDER_1H
+  CONFIRMATION_REQUEST
+}
+
+enum NotificationChannel {
+  EMAIL
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
