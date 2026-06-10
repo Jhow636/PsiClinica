@@ -2,7 +2,9 @@
 
 import { use, useState } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Plus, Loader2 } from 'lucide-react';
+import { ChevronLeft, Plus, Loader2, FileDown } from 'lucide-react';
+import { useAuthStore } from '@/store/auth.store';
+import { useToast } from '@/components/ui/toast';
 import { useRecord, useUpdateAnamnesis, useCreateNote, useUpdateNote, useDeleteNote } from '@/hooks/use-records';
 import { usePatient } from '@/hooks/use-patients';
 import { SessionNoteCard } from '@/components/records/session-note-card';
@@ -12,11 +14,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import type { NotePayload } from '@/lib/records';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+
 export default function RecordPage({ params }: { params: Promise<{ patientId: string }> }) {
   const { patientId } = use(params);
 
   const { data: patient } = usePatient(patientId);
   const { data: record, isLoading } = useRecord(patientId);
+  const toast = useToast();
+  const accessToken = useAuthStore((s) => s.accessToken);
 
   const updateAnamnesis = useUpdateAnamnesis(patientId);
   const createNote = useCreateNote(patientId);
@@ -26,6 +32,29 @@ export default function RecordPage({ params }: { params: Promise<{ patientId: st
   const [editingAnamnesis, setEditingAnamnesis] = useState(false);
   const [anamnesisText, setAnamnesisText] = useState('');
   const [showNoteForm, setShowNoteForm] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+
+  async function handleExportPdf() {
+    setExportingPdf(true);
+    try {
+      const res = await fetch(`${API_URL}/api/records/${patientId}/export/pdf`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `prontuario-${patient?.name ?? patientId}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('PDF exportado com sucesso!');
+    } catch {
+      toast('Erro ao exportar PDF.', 'error');
+    } finally {
+      setExportingPdf(false);
+    }
+  }
 
   function startEditAnamnesis() {
     setAnamnesisText(record?.anamnesis ?? '');
@@ -33,22 +62,42 @@ export default function RecordPage({ params }: { params: Promise<{ patientId: st
   }
 
   async function saveAnamnesis() {
-    await updateAnamnesis.mutateAsync(anamnesisText);
-    setEditingAnamnesis(false);
+    try {
+      await updateAnamnesis.mutateAsync(anamnesisText);
+      setEditingAnamnesis(false);
+      toast('Anamnese salva!');
+    } catch {
+      toast('Erro ao salvar anamnese.', 'error');
+    }
   }
 
   async function handleCreateNote(data: NotePayload) {
-    await createNote.mutateAsync(data);
-    setShowNoteForm(false);
+    try {
+      await createNote.mutateAsync(data);
+      setShowNoteForm(false);
+      toast('Evolução registrada!');
+    } catch {
+      toast('Erro ao registrar evolução.', 'error');
+    }
   }
 
   async function handleUpdateNote(noteId: string, content: string, tags: string[]) {
-    await updateNote.mutateAsync({ noteId, data: { content, tags } });
+    try {
+      await updateNote.mutateAsync({ noteId, data: { content, tags } });
+      toast('Evolução atualizada!');
+    } catch {
+      toast('Erro ao atualizar evolução.', 'error');
+    }
   }
 
   async function handleDeleteNote(noteId: string) {
     if (!confirm('Remover esta evolução?')) return;
-    await deleteNote.mutateAsync(noteId);
+    try {
+      await deleteNote.mutateAsync(noteId);
+      toast('Evolução removida.', 'info');
+    } catch {
+      toast('Erro ao remover evolução.', 'error');
+    }
   }
 
   const usedAppointmentIds = new Set(record?.sessionNotes.map((n) => n.appointmentId) ?? []);
@@ -81,14 +130,24 @@ export default function RecordPage({ params }: { params: Promise<{ patientId: st
         </Link>
       </div>
 
-      <div className="flex items-center gap-3">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary shrink-0">
-          {patient?.name.charAt(0).toUpperCase() ?? '?'}
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-lg font-semibold text-primary shrink-0">
+            {patient?.name.charAt(0).toUpperCase() ?? '?'}
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold">{patient?.name ?? 'Paciente'}</h1>
+            <p className="text-sm text-muted-foreground">Prontuário eletrônico</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold">{patient?.name ?? 'Paciente'}</h1>
-          <p className="text-sm text-muted-foreground">Prontuário eletrônico</p>
-        </div>
+        <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={exportingPdf}>
+          {exportingPdf ? (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <FileDown className="mr-1.5 h-3.5 w-3.5" />
+          )}
+          Exportar PDF
+        </Button>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">

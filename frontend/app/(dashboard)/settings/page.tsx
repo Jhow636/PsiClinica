@@ -2,34 +2,75 @@
 
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { Bell, Save, Loader2 } from 'lucide-react';
+import { Bell, Building2, Save, Loader2 } from 'lucide-react';
 import { useNotificationSettings, useUpdateNotificationSettings } from '@/hooks/use-notification-settings';
+import { useClinicProfile, useUpdateClinicProfile } from '@/hooks/use-clinic';
+import { useToast } from '@/components/ui/toast';
 import type { NotificationSettings } from '@/lib/notifications';
+import type { ClinicProfile } from '@/lib/clinic';
 
 export default function SettingsPage() {
-  const { data, isLoading } = useNotificationSettings();
-  const update = useUpdateNotificationSettings();
+  const toast = useToast();
 
-  const { register, handleSubmit, reset, watch } = useForm<NotificationSettings>({
-    defaultValues: {
-      reminder24hEnabled: false,
-      reminder1hEnabled: false,
-      reminderEmailText: '',
-    },
+  const { data: notifData, isLoading: notifLoading } = useNotificationSettings();
+  const updateNotif = useUpdateNotificationSettings();
+
+  const { data: clinicData, isLoading: clinicLoading } = useClinicProfile();
+  const updateClinic = useUpdateClinicProfile();
+
+  const notifForm = useForm<NotificationSettings>({
+    defaultValues: { reminder24hEnabled: false, reminder1hEnabled: false, reminderEmailText: '' },
+  });
+
+  const clinicForm = useForm<Omit<ClinicProfile, 'id'>>({
+    defaultValues: { name: '', address: '', phone: '', logoUrl: '', sessionPrice: '' },
   });
 
   useEffect(() => {
-    if (data) reset({ ...data, reminderEmailText: data.reminderEmailText ?? '' });
-  }, [data, reset]);
+    if (notifData) {
+      notifForm.reset({ ...notifData, reminderEmailText: notifData.reminderEmailText ?? '' });
+    }
+  }, [notifData, notifForm]);
 
-  const either = watch('reminder24hEnabled') || watch('reminder1hEnabled');
+  useEffect(() => {
+    if (clinicData) {
+      clinicForm.reset({
+        name: clinicData.name ?? '',
+        address: clinicData.address ?? '',
+        phone: clinicData.phone ?? '',
+        logoUrl: clinicData.logoUrl ?? '',
+        sessionPrice: clinicData.sessionPrice ?? '',
+      });
+    }
+  }, [clinicData, clinicForm]);
 
-  function onSubmit(values: NotificationSettings) {
-    update.mutate({
-      ...values,
-      reminderEmailText: values.reminderEmailText || null,
-    });
+  const either = notifForm.watch('reminder24hEnabled') || notifForm.watch('reminder1hEnabled');
+
+  async function onSaveNotif(values: NotificationSettings) {
+    try {
+      await updateNotif.mutateAsync({ ...values, reminderEmailText: values.reminderEmailText || null });
+      toast('Configurações de notificações salvas!');
+    } catch {
+      toast('Erro ao salvar notificações.', 'error');
+    }
   }
+
+  async function onSaveClinic(values: Omit<ClinicProfile, 'id'>) {
+    try {
+      await updateClinic.mutateAsync({
+        ...values,
+        address: values.address || null,
+        phone: values.phone || null,
+        logoUrl: values.logoUrl || null,
+        sessionPrice: values.sessionPrice || null,
+      });
+      toast('Perfil da clínica atualizado!');
+    } catch {
+      toast('Erro ao salvar perfil.', 'error');
+    }
+  }
+
+  const isLoading = notifLoading || clinicLoading;
 
   if (isLoading) {
     return (
@@ -46,8 +87,60 @@ export default function SettingsPage() {
         <p className="mt-1 text-sm text-gray-500">Gerencie as preferências da sua clínica.</p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-        {/* Notificações */}
+      {/* Perfil da Clínica */}
+      <form onSubmit={clinicForm.handleSubmit(onSaveClinic)} className="space-y-6">
+        <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="mb-5 flex items-center gap-2">
+            <Building2 className="h-5 w-5 text-indigo-600" />
+            <h2 className="text-base font-semibold text-gray-900">Perfil da Clínica</h2>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <Field label="Nome da clínica *" error={clinicForm.formState.errors.name?.message}>
+                <input
+                  className={inputCls(!!clinicForm.formState.errors.name)}
+                  placeholder="Ex: Consultório Silva"
+                  {...clinicForm.register('name', { required: 'Obrigatório' })}
+                />
+              </Field>
+            </div>
+            <Field label="Telefone">
+              <input
+                className={inputCls()}
+                placeholder="(11) 99999-9999"
+                {...clinicForm.register('phone')}
+              />
+            </Field>
+            <Field label="Valor padrão da sessão (R$)">
+              <input
+                className={inputCls()}
+                placeholder="200.00"
+                type="number"
+                step="0.01"
+                min="0"
+                {...clinicForm.register('sessionPrice')}
+              />
+            </Field>
+            <div className="sm:col-span-2">
+              <Field label="Endereço">
+                <input
+                  className={inputCls()}
+                  placeholder="Rua, número, cidade"
+                  {...clinicForm.register('address')}
+                />
+              </Field>
+            </div>
+          </div>
+        </section>
+
+        <div className="flex justify-end">
+          <SaveButton pending={updateClinic.isPending} label="Salvar perfil" />
+        </div>
+      </form>
+
+      {/* Notificações */}
+      <form onSubmit={notifForm.handleSubmit(onSaveNotif)} className="space-y-6">
         <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <div className="mb-4 flex items-center gap-2">
             <Bell className="h-5 w-5 text-indigo-600" />
@@ -59,13 +152,13 @@ export default function SettingsPage() {
               id="reminder24h"
               label="Lembrete 24h antes da sessão"
               description="Envia um e-mail ao paciente um dia antes da consulta."
-              {...register('reminder24hEnabled')}
+              {...notifForm.register('reminder24hEnabled')}
             />
             <Toggle
               id="reminder1h"
               label="Lembrete 1h antes da sessão"
               description="Envia um e-mail ao paciente uma hora antes da consulta."
-              {...register('reminder1hEnabled')}
+              {...notifForm.register('reminder1hEnabled')}
             />
           </div>
 
@@ -79,38 +172,47 @@ export default function SettingsPage() {
                 rows={4}
                 placeholder="Ex: Olá! Este é um lembrete da sua sessão com Dr(a). Silva…"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                {...register('reminderEmailText')}
+                {...notifForm.register('reminderEmailText')}
               />
-              <p className="mt-1 text-xs text-gray-400">
-                Deixe em branco para usar o texto padrão.
-              </p>
+              <p className="mt-1 text-xs text-gray-400">Deixe em branco para usar o texto padrão.</p>
             </div>
           )}
         </section>
 
         <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={update.isPending}
-            className="flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60"
-          >
-            {update.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
-            Salvar configurações
-          </button>
+          <SaveButton pending={updateNotif.isPending} label="Salvar notificações" />
         </div>
-
-        {update.isSuccess && (
-          <p className="text-center text-sm text-green-600">Configurações salvas com sucesso!</p>
-        )}
-        {update.isError && (
-          <p className="text-center text-sm text-red-600">Erro ao salvar. Tente novamente.</p>
-        )}
       </form>
     </div>
+  );
+}
+
+function inputCls(hasError = false) {
+  return `w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
+    hasError ? 'border-red-400 focus:border-red-400' : 'border-gray-300 focus:border-indigo-500'
+  }`;
+}
+
+function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="mb-1 block text-sm font-medium text-gray-700">{label}</label>
+      {children}
+      {error && <p className="mt-1 text-xs text-red-500">{error}</p>}
+    </div>
+  );
+}
+
+function SaveButton({ pending, label }: { pending: boolean; label: string }) {
+  return (
+    <button
+      type="submit"
+      disabled={pending}
+      className="flex items-center gap-2 rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:opacity-60"
+    >
+      {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+      {label}
+    </button>
   );
 }
 

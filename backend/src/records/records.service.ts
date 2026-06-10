@@ -8,10 +8,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { UpdateAnamnesisDto } from './dto/update-anamnesis.dto';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { UpdateNoteDto } from './dto/update-note.dto';
+import { PdfService } from './pdf.service';
 
 @Injectable()
 export class RecordsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private pdf: PdfService,
+  ) {}
 
   private async getPatientClinicId(userId: string): Promise<string> {
     const clinic = await this.prisma.clinic.findUnique({ where: { userId } });
@@ -135,5 +139,33 @@ export class RecordsService {
     if (!note) throw new NotFoundException('Anotação não encontrada');
 
     await this.prisma.sessionNote.delete({ where: { id: noteId } });
+  }
+
+  async exportPdf(userId: string, patientId: string): Promise<Uint8Array> {
+    const record = await this.getOrCreateRecord(userId, patientId);
+
+    const clinic = await this.prisma.clinic.findUnique({ where: { userId } });
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const patient = await this.prisma.patient.findUnique({ where: { id: patientId } });
+
+    if (!clinic || !user || !patient) throw new NotFoundException('Dados não encontrados.');
+
+    return this.pdf.generateMedicalRecord({
+      patientName: patient.name,
+      patientEmail: patient.email,
+      patientPhone: patient.phone,
+      patientBirthDate: patient.birthDate,
+      clinicName: clinic.name,
+      psychologistName: user.name,
+      anamnesis: record.anamnesis,
+      sessionNotes: record.sessionNotes.map((n) => ({
+        id: n.id,
+        content: n.content,
+        tags: n.tags,
+        createdAt: n.createdAt,
+        appointment: n.appointment ? { startTime: n.appointment.startTime } : null,
+      })),
+      generatedAt: new Date(),
+    });
   }
 }
