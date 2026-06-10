@@ -16,15 +16,9 @@ export class NotificationsScheduler {
     private prisma: PrismaService,
   ) {}
 
-  // Runs every minute
   @Cron(CronExpression.EVERY_MINUTE)
   async scheduleReminders(): Promise<void> {
-    if (process.env.REMINDER_24H_ENABLED !== 'true' && process.env.REMINDER_1H_ENABLED !== 'true') {
-      return;
-    }
-
     const now = new Date();
-
     await Promise.all([
       this.processWindow(now, 24, NotificationType.REMINDER_24H),
       this.processWindow(now, 1, NotificationType.REMINDER_1H),
@@ -36,14 +30,6 @@ export class NotificationsScheduler {
     hoursAhead: 24 | 1,
     type: NotificationType,
   ): Promise<void> {
-    const enabled =
-      hoursAhead === 24
-        ? process.env.REMINDER_24H_ENABLED === 'true'
-        : process.env.REMINDER_1H_ENABLED === 'true';
-
-    if (!enabled) return;
-
-    // Target: appointments starting in [hoursAhead - 1min, hoursAhead + 1min]
     const windowStart = subMinutes(addHours(now, hoursAhead), 1);
     const windowEnd = addHours(now, hoursAhead);
 
@@ -53,10 +39,19 @@ export class NotificationsScheduler {
         status: { in: ['SCHEDULED', 'CONFIRMED'] },
         patient: { email: { not: null } },
       },
-      include: { patient: true },
+      include: {
+        patient: true,
+        user: { include: { clinic: true } },
+      },
     });
 
     for (const appt of appointments) {
+      const clinic = appt.user.clinic;
+      if (!clinic) continue;
+
+      const enabled = hoursAhead === 24 ? clinic.reminder24hEnabled : clinic.reminder1hEnabled;
+      if (!enabled) continue;
+
       const alreadySent = await this.prisma.notification.findFirst({
         where: {
           appointmentId: appt.id,

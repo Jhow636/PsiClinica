@@ -29,9 +29,12 @@ model Clinic {
   phone        String?
   logoUrl      String?  @map("logo_url")
   sessionPrice Decimal? @map("session_price") @db.Decimal(10, 2)
-  workingHours Json?    @map("working_hours")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  workingHours        Json?    @map("working_hours")
+  reminder24hEnabled  Boolean  @default(false) @map("reminder_24h_enabled")
+  reminder1hEnabled   Boolean  @default(false) @map("reminder_1h_enabled")
+  reminderEmailText   String?  @map("reminder_email_text")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
 
   user     User      @relation(fields: [userId], references: [id])
   patients Patient[]

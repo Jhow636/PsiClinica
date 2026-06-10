@@ -1,6 +1,17 @@
-import { Controller, Get, Param, Query, BadRequestException } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { NotificationsService } from './notifications.service';
+import {
+  Controller,
+  Get,
+  Put,
+  Body,
+  Param,
+  Query,
+  BadRequestException,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiOperation, ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { NotificationsService, NotificationSettingsDto } from './notifications.service';
 
 @ApiTags('notifications')
 @Controller('notifications')
@@ -17,5 +28,24 @@ export class NotificationsController {
       throw new BadRequestException('Parâmetro action deve ser confirm ou cancel.');
     }
     return this.notifications.handleConfirmation(notificationId, action);
+  }
+
+  @Get('settings')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Buscar configurações de notificações' })
+  async getSettings(@CurrentUser() user: { id: string }) {
+    return this.notifications.getSettings(user.id);
+  }
+
+  @Put('settings')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Salvar configurações de notificações' })
+  async updateSettings(
+    @CurrentUser() user: { id: string },
+    @Body() dto: NotificationSettingsDto,
+  ) {
+    return this.notifications.updateSettings(user.id, dto);
   }
 }

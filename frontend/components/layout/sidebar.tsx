@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Users, Calendar, FileText, DollarSign, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, FileText, DollarSign, Settings, LogOut } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth.store';
 
@@ -12,6 +12,7 @@ const NAV = [
   { href: '/appointments', label: 'Agenda', icon: Calendar },
   { href: '/records', label: 'Prontuários', icon: FileText },
   { href: '/finances', label: 'Financeiro', icon: DollarSign },
+  { href: '/settings', label: 'Configurações', icon: Settings },
 ];
 
 export function Sidebar() {

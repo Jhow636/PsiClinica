@@ -2,6 +2,12 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { NotificationStatus } from '../../generated/prisma';
 
+export class NotificationSettingsDto {
+  reminder24hEnabled!: boolean;
+  reminder1hEnabled!: boolean;
+  reminderEmailText!: string | null;
+}
+
 @Injectable()
 export class NotificationsService {
   constructor(private prisma: PrismaService) {}
@@ -45,5 +51,35 @@ export class NotificationsService {
       where: { appointmentId },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async getSettings(userId: string): Promise<NotificationSettingsDto> {
+    const clinic = await this.prisma.clinic.findUnique({ where: { userId } });
+    if (!clinic) throw new NotFoundException('Clínica não encontrada.');
+    return {
+      reminder24hEnabled: clinic.reminder24hEnabled,
+      reminder1hEnabled: clinic.reminder1hEnabled,
+      reminderEmailText: clinic.reminderEmailText,
+    };
+  }
+
+  async updateSettings(userId: string, dto: NotificationSettingsDto): Promise<NotificationSettingsDto> {
+    const clinic = await this.prisma.clinic.findUnique({ where: { userId } });
+    if (!clinic) throw new NotFoundException('Clínica não encontrada.');
+
+    const updated = await this.prisma.clinic.update({
+      where: { userId },
+      data: {
+        reminder24hEnabled: dto.reminder24hEnabled,
+        reminder1hEnabled: dto.reminder1hEnabled,
+        reminderEmailText: dto.reminderEmailText ?? null,
+      },
+    });
+
+    return {
+      reminder24hEnabled: updated.reminder24hEnabled,
+      reminder1hEnabled: updated.reminder1hEnabled,
+      reminderEmailText: updated.reminderEmailText,
+    };
   }
 }
