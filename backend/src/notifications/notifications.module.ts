@@ -17,7 +17,11 @@ import { NOTIFICATIONS_QUEUE } from './notifications.constants';
       useFactory: (config: ConfigService) => {
         const redisUrl = config.get<string>('REDIS_URL');
         if (redisUrl) {
-          return { url: redisUrl };
+          const tls = redisUrl.startsWith('rediss://');
+          return {
+            url: redisUrl,
+            ...(tls && { tls: { rejectUnauthorized: false } }),
+          };
         }
         return {
           redis: {
