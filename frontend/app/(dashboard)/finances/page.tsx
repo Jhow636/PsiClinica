@@ -12,6 +12,7 @@ import {
 } from '@/hooks/use-finances';
 import { SummaryCards } from '@/components/finances/summary-cards';
 import { PaymentStatusBadge } from '@/components/finances/payment-status-badge';
+import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import type { PaymentStatus } from '@/lib/finances';
@@ -26,6 +27,7 @@ const STATUS_OPTIONS: { value: PaymentStatus | ''; label: string }[] = [
 ];
 
 export default function FinancesPage() {
+  const toast = useToast();
   const [statusFilter, setStatusFilter] = useState<PaymentStatus | ''>('');
   const [page, setPage] = useState(1);
 
@@ -39,10 +41,21 @@ export default function FinancesPage() {
   const deletePayment = useDeletePayment();
 
   async function handleStatusChange(id: string, status: PaymentStatus, method?: string) {
-    await updateStatus.mutateAsync({
-      id,
-      data: { status, method: method || undefined },
-    });
+    try {
+      await updateStatus.mutateAsync({ id, data: { status, method: method || undefined } });
+      toast('Status de pagamento atualizado!');
+    } catch {
+      toast('Erro ao atualizar pagamento.', 'error');
+    }
+  }
+
+  async function handleDeletePayment(id: string) {
+    try {
+      await deletePayment.mutateAsync(id);
+      toast('Lançamento removido.', 'info');
+    } catch {
+      toast('Erro ao remover lançamento.', 'error');
+    }
   }
 
   function handleExportCSV() {
@@ -66,6 +79,7 @@ export default function FinancesPage() {
     a.download = `financeiro-${format(new Date(), 'yyyy-MM-dd')}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+    toast('CSV exportado!');
   }
 
   return (
@@ -144,7 +158,7 @@ export default function FinancesPage() {
                         onStatusChange={handleStatusChange}
                         onDelete={async () => {
                           if (confirm('Remover este lançamento?'))
-                            await deletePayment.mutateAsync(p.id);
+                            await handleDeletePayment(p.id);
                         }}
                         isUpdating={updateStatus.isPending}
                       />

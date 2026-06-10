@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Plus, Search, Loader2, Trash2, Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
 import { usePatients, useDeletePatient } from '@/hooks/use-patients';
+import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +13,7 @@ import { Card, CardContent } from '@/components/ui/card';
 
 export default function PatientsPage() {
   const router = useRouter();
+  const toast = useToast();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState('');
@@ -27,7 +29,12 @@ export default function PatientsPage() {
 
   async function handleDelete(id: string, name: string) {
     if (!confirm(`Remover ${name}?`)) return;
-    await deletePatient.mutateAsync(id);
+    try {
+      await deletePatient.mutateAsync(id);
+      toast(`${name} removido com sucesso.`, 'info');
+    } catch {
+      toast('Erro ao remover paciente.', 'error');
+    }
   }
 
   return (

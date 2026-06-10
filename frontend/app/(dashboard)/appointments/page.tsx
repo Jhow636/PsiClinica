@@ -18,6 +18,7 @@ import {
 } from '@/hooks/use-appointments';
 import { AppointmentModal } from '@/components/appointments/appointment-modal';
 import { StatusBadge } from '@/components/appointments/status-badge';
+import { useToast } from '@/components/ui/toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import type { Appointment, AppointmentPayload, AppointmentStatus } from '@/lib/appointments';
@@ -39,6 +40,7 @@ const STATUS_OPTIONS: { value: AppointmentStatus; label: string }[] = [
 ];
 
 export default function AppointmentsPage() {
+  const toast = useToast();
   const [rangeStart, setRangeStart] = useState(() =>
     format(startOfMonth(new Date()), 'yyyy-MM-dd'),
   );
@@ -88,30 +90,48 @@ export default function AppointmentsPage() {
         (delta.days * 86400000) + (delta.months * 30 * 86400000));
       try {
         await updateAppt.mutateAsync({ startTime: newStart.toISOString(), endTime: newEnd.toISOString() });
+        toast('Sessão reagendada!');
       } catch {
         arg.revert();
+        toast('Erro ao reagendar sessão.', 'error');
       }
     },
-    [updateAppt],
+    [updateAppt, toast],
   );
 
   async function handleModalSubmit(payload: AppointmentPayload) {
-    if (editingAppt) {
-      await updateAppt.mutateAsync(payload);
-    } else {
-      await createAppt.mutateAsync(payload);
+    try {
+      if (editingAppt) {
+        await updateAppt.mutateAsync(payload);
+        toast('Sessão atualizada!');
+      } else {
+        await createAppt.mutateAsync(payload);
+        toast('Sessão agendada!');
+      }
+    } catch {
+      toast('Erro ao salvar sessão.', 'error');
     }
   }
 
   async function handleStatusChange(id: string, status: AppointmentStatus) {
-    await updateStatus.mutateAsync({ id, status });
-    setDetailAppt((prev) => (prev ? { ...prev, status } : prev));
+    try {
+      await updateStatus.mutateAsync({ id, status });
+      setDetailAppt((prev) => (prev ? { ...prev, status } : prev));
+      toast('Status atualizado!');
+    } catch {
+      toast('Erro ao atualizar status.', 'error');
+    }
   }
 
   async function handleDelete(id: string) {
     if (!confirm('Remover esta sessão?')) return;
-    await deleteAppt.mutateAsync(id);
-    setDetailAppt(undefined);
+    try {
+      await deleteAppt.mutateAsync(id);
+      setDetailAppt(undefined);
+      toast('Sessão removida.', 'info');
+    } catch {
+      toast('Erro ao remover sessão.', 'error');
+    }
   }
 
   return (
